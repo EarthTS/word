@@ -1,103 +1,128 @@
-import Image from "next/image";
+'use client';
+
+import React from 'react';
+import { Card, Button, Typography, Row, Col, Space } from 'antd';
+import { useRouter } from 'next/navigation';
+import { BookOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+
+const { Title, Text } = Typography;
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const router = useRouter();
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  return (
+    <div style={{ padding: '16px', minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
+      <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: '48px', marginTop: '32px' }}>
+          <Title level={1} style={{ color: '#1890ff', marginBottom: '16px' }}>
+            📚 Vocabulary Learning
+          </Title>
+          <Text style={{ fontSize: '18px', color: '#666' }}>
+            แอปเรียนคำศัพท์ภาษาอังกฤษ
+          </Text>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        <Row gutter={[24, 24]} justify="center">
+          <Col xs={24} sm={12} md={10}>
+            <Card
+              hoverable
+              style={{
+                textAlign: 'center',
+                borderRadius: '16px',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                border: '1px solid #e8e8e8',
+                height: '280px'
+              }}
+              bodyStyle={{ padding: '32px' }}
+            >
+              <div style={{ marginBottom: '24px' }}>
+                <BookOutlined style={{ fontSize: '48px', color: '#1890ff' }} />
+              </div>
+              <Title level={3} style={{ marginBottom: '16px', color: '#333' }}>
+                เรียนตามบท
+              </Title>
+              <Text style={{ 
+                fontSize: '16px', 
+                color: '#666',
+                display: 'block',
+                marginBottom: '24px'
+              }}>
+                เลือกเรียนคำศัพท์ตามบท<br/>
+                (100 บท บทละ 30 คำ)
+              </Text>
+              <Button 
+                type="primary" 
+                size="large"
+                onClick={() => router.push('/story')}
+                style={{ 
+                  borderRadius: '8px',
+                  height: '44px',
+                  fontSize: '16px',
+                  minWidth: '140px'
+                }}
+              >
+                เริ่มเรียน
+              </Button>
+            </Card>
+          </Col>
+
+          <Col xs={24} sm={12} md={10}>
+            <Card
+              hoverable
+              style={{
+                textAlign: 'center',
+                borderRadius: '16px',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                border: '1px solid #e8e8e8',
+                height: '280px'
+              }}
+              bodyStyle={{ padding: '32px' }}
+            >
+              <div style={{ marginBottom: '24px' }}>
+                <QuestionCircleOutlined style={{ fontSize: '48px', color: '#52c41a' }} />
+              </div>
+              <Title level={3} style={{ marginBottom: '16px', color: '#333' }}>
+                ทดสอบความรู้
+              </Title>
+              <Text style={{ 
+                fontSize: '16px', 
+                color: '#666',
+                display: 'block',
+                marginBottom: '24px'
+              }}>
+                ทดสอบคำศัพท์แบบ Quiz<br/>
+                (4 ตัวเลือก)
+              </Text>
+              <Button 
+                type="primary" 
+                size="large"
+                onClick={() => router.push('/quiz')}
+                style={{ 
+                  borderRadius: '8px',
+                  height: '44px',
+                  fontSize: '16px',
+                  minWidth: '140px',
+                  backgroundColor: '#52c41a',
+                  borderColor: '#52c41a'
+                }}
+              >
+                เริ่มทดสอบ
+              </Button>
+            </Card>
+          </Col>
+        </Row>
+
+        <div style={{ textAlign: 'center', marginTop: '48px' }}>
+          <Space direction="vertical" size="small">
+            <Text type="secondary" style={{ fontSize: '14px' }}>
+              📊 รวมคำศัพท์ทั้งหมด 3,000 คำ
+            </Text>
+            <Text type="secondary" style={{ fontSize: '14px' }}>
+              🎯 เรียนรู้และทดสอบความรู้ได้อย่างสะดวก
+            </Text>
+          </Space>
+        </div>
+      </div>
     </div>
   );
 }
