@@ -31,6 +31,9 @@ export default function QuizPage() {
   const [showResult, setShowResult] = useState(false);
   const [score, setScore] = useState(0);
   const [answeredQuestions, setAnsweredQuestions] = useState<boolean[]>([]);
+  const [wrongQuestions, setWrongQuestions] = useState<number[]>([]);
+  const [isRetryRound, setIsRetryRound] = useState(false);
+  const [currentRoundQuestions, setCurrentRoundQuestions] = useState<QuizQuestion[]>([]);
 
   // Get words for the current chapter
   const chapterWords = useMemo(() => {
@@ -55,10 +58,10 @@ export default function QuizPage() {
     return shuffledWords.map((word): QuizQuestion => {
       // Get 3 random wrong answers from the same chapter
       const wrongAnswers = chapterWords
-        .filter(w => w.thai_meaning !== word.thai_meaning)
+        .filter((w: any) => w.thai_meaning !== word.thai_meaning)
         .sort(() => Math.random() - 0.5)
         .slice(0, 3)
-        .map(w => w.thai_meaning);
+        .map((w: any) => w.thai_meaning);
 
       // Create choices array with correct answer and wrong answers
       const choices = [word.thai_meaning, ...wrongAnswers].sort(() => Math.random() - 0.5);
@@ -71,39 +74,102 @@ export default function QuizPage() {
     });
   }, [chapterWords]);
 
+  // Set up current round questions
   useEffect(() => {
-    setAnsweredQuestions(new Array(quizQuestions.length).fill(false));
-  }, [quizQuestions]);
+    if (!isRetryRound) {
+      setCurrentRoundQuestions(quizQuestions);
+    } else {
+      // Get only wrong questions for retry
+      const retryQuestions = wrongQuestions.map(index => quizQuestions[index]);
+      setCurrentRoundQuestions(retryQuestions);
+    }
+  }, [quizQuestions, isRetryRound, wrongQuestions]);
+
+  useEffect(() => {
+    setAnsweredQuestions(new Array(currentRoundQuestions.length).fill(false));
+    setCurrentQuestionIndex(0);
+    setSelectedAnswer(null);
+    setShowResult(false);
+  }, [currentRoundQuestions]);
 
   const handleAnswerSelect = (answer: string) => {
     setSelectedAnswer(answer);
     setShowResult(true);
 
-    const isCorrect = answer === quizQuestions[currentQuestionIndex].correctAnswer;
+    const isCorrect = answer === currentRoundQuestions[currentQuestionIndex].correctAnswer;
     if (isCorrect) {
-      setScore(prev => prev + 1);
+      setScore((prev: any) => prev + 1);
       message.success('ถูกต้อง!');
     } else {
-      message.error(`ผิด! คำตอบที่ถูกคือ: ${quizQuestions[currentQuestionIndex].correctAnswer}`);
+      message.error(`ผิด! คำตอบที่ถูกคือ: ${currentRoundQuestions[currentQuestionIndex].correctAnswer}`);
+      // Track wrong questions for retry (using original quiz index if in retry mode)
+      if (!isRetryRound) {
+        const originalIndex = quizQuestions.findIndex(q => q.word.english === currentRoundQuestions[currentQuestionIndex].word.english);
+        setWrongQuestions((prev: any) => [...prev, originalIndex]);
+      } else {
+        // Still wrong in retry round, keep it for next retry
+        const originalIndex = wrongQuestions[currentQuestionIndex];
+        if (!wrongQuestions.includes(originalIndex)) {
+          setWrongQuestions((prev: any) => [...prev, originalIndex]);
+        }
+      }
     }
 
-    setAnsweredQuestions(prev => {
+    setAnsweredQuestions((prev: any) => {
       const newAnswered = [...prev];
       newAnswered[currentQuestionIndex] = true;
       return newAnswered;
     });
   };
 
+  // Cookie functions
+  const getCompletedChapters = () => {
+    if (typeof document !== 'undefined') {
+      const cookie = document.cookie.split(';').find(c => c.trim().startsWith('completed_chapters='));
+      return cookie ? JSON.parse(cookie.split('=')[1]) : [];
+    }
+    return [];
+  };
+
+  const saveCompletedChapter = (chapterNumber: number) => {
+    if (typeof document !== 'undefined') {
+      const completed = getCompletedChapters();
+      if (!completed.includes(chapterNumber)) {
+        completed.push(chapterNumber);
+        document.cookie = `completed_chapters=${JSON.stringify(completed)}; path=/; max-age=31536000`; // 1 year
+      }
+    }
+  };
+
   const handleNextQuestion = () => {
-    if (currentQuestionIndex < quizQuestions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
+    if (currentQuestionIndex < currentRoundQuestions.length - 1) {
+      setCurrentQuestionIndex((prev: any) => prev + 1);
       setSelectedAnswer(null);
       setShowResult(false);
     } else {
-      // Quiz completed
-      const finalScore = ((score + (selectedAnswer === quizQuestions[currentQuestionIndex].correctAnswer ? 1 : 0)) / quizQuestions.length * 100).toFixed(1);
-      message.success(`จบแบบทดสอบ! คะแนนของคุณ: ${finalScore}%`);
-      router.push('/story');
+      // Round completed
+      const currentCorrect = selectedAnswer === currentRoundQuestions[currentQuestionIndex].correctAnswer;
+      const finalScore = score + (currentCorrect ? 1 : 0);
+      
+      if (wrongQuestions.length > 0 && !isRetryRound) {
+        // Start retry round with wrong questions
+        message.info(`ทำซ้ำข้อที่ผิด (${wrongQuestions.length} ข้อ)`);
+        setIsRetryRound(true);
+        setScore(0); // Reset score for retry round
+        setWrongQuestions([]); // Will track new wrong questions in retry
+      } else if (wrongQuestions.length > 0 && isRetryRound) {
+        // Still have wrong answers in retry round, continue retrying
+        message.info(`ทำซ้ำข้อที่ยังผิด (${wrongQuestions.length} ข้อ)`);
+        setScore(0);
+        const newWrongQuestions = [...wrongQuestions];
+        setWrongQuestions([]);
+        setTimeout(() => setWrongQuestions(newWrongQuestions), 100);
+      } else {
+        // All correct! Chapter completed
+        message.success('ยินดีด้วย! ผ่านบทนี้แล้ว 🎉');
+        saveCompletedChapter(chapterId);
+        setTimeout(() => router.push('/story'), 1500);
+      }
     }
   };
 
@@ -120,7 +186,7 @@ export default function QuizPage() {
     );
   }
 
-  if (quizQuestions.length === 0) {
+  if (currentRoundQuestions.length === 0) {
     return (
       <div style={{ padding: '16px', textAlign: 'center' }}>
         <Title level={3}>กำลังโหลด...</Title>
@@ -128,8 +194,8 @@ export default function QuizPage() {
     );
   }
 
-  const currentQuestion = quizQuestions[currentQuestionIndex];
-  const progress = ((currentQuestionIndex + 1) / quizQuestions.length) * 100;
+  const currentQuestion = currentRoundQuestions[currentQuestionIndex];
+  const progress = ((currentQuestionIndex + 1) / currentRoundQuestions.length) * 100;
 
   return (
     <div style={{ padding: '16px', minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
@@ -168,7 +234,8 @@ export default function QuizPage() {
             style={{ marginBottom: '8px' }}
           />
           <Text type="secondary" style={{ fontSize: '14px' }}>
-            ข้อที่ {currentQuestionIndex + 1} จาก {quizQuestions.length}
+            ข้อที่ {currentQuestionIndex + 1} จาก {currentRoundQuestions.length}
+            {isRetryRound && <span style={{ color: '#ff4d4f', marginLeft: '8px' }}>(ทำซ้ำข้อที่ผิด)</span>}
           </Text>
         </div>
 
@@ -256,7 +323,8 @@ export default function QuizPage() {
               onClick={handleNextQuestion}
               style={{ minWidth: '200px', borderRadius: '8px' }}
             >
-              {currentQuestionIndex < quizQuestions.length - 1 ? 'ข้อถัดไป' : 'จบแบบทดสอบ'}
+              {currentQuestionIndex < currentRoundQuestions.length - 1 ? 'ข้อถัดไป' : 
+               (wrongQuestions.length > 0 ? 'ไปข้อต่อไป' : 'จบแบบทดสอบ')}
             </Button>
           </div>
         )}
