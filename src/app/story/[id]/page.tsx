@@ -32,6 +32,7 @@ export default function QuizPage() {
   const [score, setScore] = useState(0);
   const [answeredQuestions, setAnsweredQuestions] = useState<boolean[]>([]);
   const [wrongQuestions, setWrongQuestions] = useState<number[]>([]);
+  const [roundWrongQuestions, setRoundWrongQuestions] = useState<number[]>([]);
   const [isRetryRound, setIsRetryRound] = useState(false);
   const [currentRoundQuestions, setCurrentRoundQuestions] = useState<QuizQuestion[]>([]);
 
@@ -58,10 +59,10 @@ export default function QuizPage() {
     return shuffledWords.map((word): QuizQuestion => {
       // Get 3 random wrong answers from the same chapter
       const wrongAnswers = chapterWords
-        .filter((w: any) => w.thai_meaning !== word.thai_meaning)
+        .filter((w: VocabularyItem) => w.thai_meaning !== word.thai_meaning)
         .sort(() => Math.random() - 0.5)
         .slice(0, 3)
-        .map((w: any) => w.thai_meaning);
+        .map((w: VocabularyItem) => w.thai_meaning);
 
       // Create choices array with correct answer and wrong answers
       const choices = [word.thai_meaning, ...wrongAnswers].sort(() => Math.random() - 0.5);
@@ -90,6 +91,7 @@ export default function QuizPage() {
     setCurrentQuestionIndex(0);
     setSelectedAnswer(null);
     setShowResult(false);
+    setRoundWrongQuestions([]);
   }, [currentRoundQuestions]);
 
   const handleAnswerSelect = (answer: string) => {
@@ -98,24 +100,19 @@ export default function QuizPage() {
 
     const isCorrect = answer === currentRoundQuestions[currentQuestionIndex].correctAnswer;
     if (isCorrect) {
-      setScore((prev: any) => prev + 1);
+      setScore(prev => prev + 1);
       message.success('ถูกต้อง!');
     } else {
       message.error(`ผิด! คำตอบที่ถูกคือ: ${currentRoundQuestions[currentQuestionIndex].correctAnswer}`);
-      // Track wrong questions for retry (using original quiz index if in retry mode)
-      if (!isRetryRound) {
-        const originalIndex = quizQuestions.findIndex(q => q.word.english === currentRoundQuestions[currentQuestionIndex].word.english);
-        setWrongQuestions((prev: any) => [...prev, originalIndex]);
-      } else {
-        // Still wrong in retry round, keep it for next retry
-        const originalIndex = wrongQuestions[currentQuestionIndex];
-        if (!wrongQuestions.includes(originalIndex)) {
-          setWrongQuestions((prev: any) => [...prev, originalIndex]);
-        }
-      }
+      // Track wrong questions for the current round (using original quiz index)
+      const originalIndex = isRetryRound
+        ? wrongQuestions[currentQuestionIndex]
+        : quizQuestions.findIndex(q => q.word.english === currentRoundQuestions[currentQuestionIndex].word.english);
+
+      setRoundWrongQuestions(prev => (prev.includes(originalIndex) ? prev : [...prev, originalIndex]));
     }
 
-    setAnsweredQuestions((prev: any) => {
+    setAnsweredQuestions(prev => {
       const newAnswered = [...prev];
       newAnswered[currentQuestionIndex] = true;
       return newAnswered;
@@ -143,27 +140,26 @@ export default function QuizPage() {
 
   const handleNextQuestion = () => {
     if (currentQuestionIndex < currentRoundQuestions.length - 1) {
-      setCurrentQuestionIndex((prev: any) => prev + 1);
+      setCurrentQuestionIndex(prev => prev + 1);
       setSelectedAnswer(null);
       setShowResult(false);
     } else {
       // Round completed
-      const currentCorrect = selectedAnswer === currentRoundQuestions[currentQuestionIndex].correctAnswer;
-      const finalScore = score + (currentCorrect ? 1 : 0);
-      
-      if (wrongQuestions.length > 0 && !isRetryRound) {
-        // Start retry round with wrong questions
-        message.info(`ทำซ้ำข้อที่ผิด (${wrongQuestions.length} ข้อ)`);
+      const hasWrongThisRound = roundWrongQuestions.length > 0;
+
+      if (hasWrongThisRound && !isRetryRound) {
+        // Start retry round with wrong questions from this round
+        message.info(`ทำซ้ำข้อที่ผิด (${roundWrongQuestions.length} ข้อ)`);
         setIsRetryRound(true);
         setScore(0); // Reset score for retry round
-        setWrongQuestions([]); // Will track new wrong questions in retry
-      } else if (wrongQuestions.length > 0 && isRetryRound) {
+        setWrongQuestions(roundWrongQuestions);
+        setRoundWrongQuestions([]);
+      } else if (hasWrongThisRound && isRetryRound) {
         // Still have wrong answers in retry round, continue retrying
-        message.info(`ทำซ้ำข้อที่ยังผิด (${wrongQuestions.length} ข้อ)`);
+        message.info(`ทำซ้ำข้อที่ยังผิด (${roundWrongQuestions.length} ข้อ)`);
         setScore(0);
-        const newWrongQuestions = [...wrongQuestions];
-        setWrongQuestions([]);
-        setTimeout(() => setWrongQuestions(newWrongQuestions), 100);
+        setWrongQuestions(roundWrongQuestions);
+        setRoundWrongQuestions([]);
       } else {
         // All correct! Chapter completed
         message.success('ยินดีด้วย! ผ่านบทนี้แล้ว 🎉');
