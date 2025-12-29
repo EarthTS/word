@@ -81,40 +81,61 @@ export default function QuizPage() {
       setCurrentRoundQuestions(quizQuestions);
     } else {
       // Get only wrong questions for retry
-      const retryQuestions = wrongQuestions.map(index => quizQuestions[index]);
+      const retryQuestions = wrongQuestions
+        .map(index => quizQuestions[index])
+        .filter((q): q is QuizQuestion => q !== undefined);
       setCurrentRoundQuestions(retryQuestions);
     }
   }, [quizQuestions, isRetryRound, wrongQuestions]);
 
   useEffect(() => {
-    setAnsweredQuestions(new Array(currentRoundQuestions.length).fill(false));
-    setCurrentQuestionIndex(0);
-    setSelectedAnswer(null);
-    setShowResult(false);
-    setRoundWrongQuestions([]);
+    if (currentRoundQuestions.length > 0) {
+      setAnsweredQuestions(new Array(currentRoundQuestions.length).fill(false));
+      setCurrentQuestionIndex(0);
+      setSelectedAnswer(null);
+      setShowResult(false);
+      setRoundWrongQuestions([]);
+    }
   }, [currentRoundQuestions]);
 
   const handleAnswerSelect = (answer: string) => {
+    const safeIndex = Math.min(currentQuestionIndex, currentRoundQuestions.length - 1);
+    if (safeIndex < 0 || safeIndex >= currentRoundQuestions.length) {
+      return;
+    }
+
     setSelectedAnswer(answer);
     setShowResult(true);
 
-    const isCorrect = answer === currentRoundQuestions[currentQuestionIndex].correctAnswer;
+    const currentQuestion = currentRoundQuestions[safeIndex];
+    if (!currentQuestion) {
+      return;
+    }
+
+    const isCorrect = answer === currentQuestion.correctAnswer;
     if (isCorrect) {
       setScore(prev => prev + 1);
       message.success('ถูกต้อง!');
     } else {
-      message.error(`ผิด! คำตอบที่ถูกคือ: ${currentRoundQuestions[currentQuestionIndex].correctAnswer}`);
+      message.error(`ผิด! คำตอบที่ถูกคือ: ${currentQuestion.correctAnswer}`);
       // Track wrong questions for the current round (using original quiz index)
-      const originalIndex = isRetryRound
-        ? wrongQuestions[currentQuestionIndex]
-        : quizQuestions.findIndex(q => q.word.english === currentRoundQuestions[currentQuestionIndex].word.english);
+      let originalIndex: number;
+      if (isRetryRound) {
+        // In retry round, get the original index from wrongQuestions array
+        originalIndex = wrongQuestions[safeIndex] ?? -1;
+      } else {
+        // In first round, find the index in quizQuestions
+        originalIndex = quizQuestions.findIndex(q => q.word.english === currentQuestion.word.english);
+      }
 
-      setRoundWrongQuestions(prev => (prev.includes(originalIndex) ? prev : [...prev, originalIndex]));
+      if (originalIndex >= 0) {
+        setRoundWrongQuestions(prev => (prev.includes(originalIndex) ? prev : [...prev, originalIndex]));
+      }
     }
 
     setAnsweredQuestions(prev => {
       const newAnswered = [...prev];
-      newAnswered[currentQuestionIndex] = true;
+      newAnswered[safeIndex] = true;
       return newAnswered;
     });
   };
@@ -139,26 +160,29 @@ export default function QuizPage() {
   };
 
   const handleNextQuestion = () => {
-    if (currentQuestionIndex < currentRoundQuestions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
+    const safeIndex = Math.min(currentQuestionIndex, currentRoundQuestions.length - 1);
+    if (safeIndex < currentRoundQuestions.length - 1) {
+      setCurrentQuestionIndex(prev => Math.min(prev + 1, currentRoundQuestions.length - 1));
       setSelectedAnswer(null);
       setShowResult(false);
     } else {
       // Round completed
       const hasWrongThisRound = roundWrongQuestions.length > 0;
+      // Filter out invalid indices
+      const validWrongIndices = roundWrongQuestions.filter(idx => idx >= 0 && idx < quizQuestions.length);
 
-      if (hasWrongThisRound && !isRetryRound) {
+      if (validWrongIndices.length > 0 && !isRetryRound) {
         // Start retry round with wrong questions from this round
-        message.info(`ทำซ้ำข้อที่ผิด (${roundWrongQuestions.length} ข้อ)`);
+        message.info(`ทำซ้ำข้อที่ผิด (${validWrongIndices.length} ข้อ)`);
         setIsRetryRound(true);
         setScore(0); // Reset score for retry round
-        setWrongQuestions(roundWrongQuestions);
+        setWrongQuestions(validWrongIndices);
         setRoundWrongQuestions([]);
-      } else if (hasWrongThisRound && isRetryRound) {
+      } else if (validWrongIndices.length > 0 && isRetryRound) {
         // Still have wrong answers in retry round, continue retrying
-        message.info(`ทำซ้ำข้อที่ยังผิด (${roundWrongQuestions.length} ข้อ)`);
+        message.info(`ทำซ้ำข้อที่ยังผิด (${validWrongIndices.length} ข้อ)`);
         setScore(0);
-        setWrongQuestions(roundWrongQuestions);
+        setWrongQuestions(validWrongIndices);
         setRoundWrongQuestions([]);
       } else {
         // All correct! Chapter completed
@@ -190,8 +214,20 @@ export default function QuizPage() {
     );
   }
 
-  const currentQuestion = currentRoundQuestions[currentQuestionIndex];
-  const progress = ((currentQuestionIndex + 1) / currentRoundQuestions.length) * 100;
+  // Ensure currentQuestionIndex is within bounds
+  const safeQuestionIndex = Math.min(currentQuestionIndex, currentRoundQuestions.length - 1);
+  const currentQuestion = currentRoundQuestions[safeQuestionIndex];
+  
+  // Safety check: if currentQuestion is undefined, show loading
+  if (!currentQuestion || !currentQuestion.word) {
+    return (
+      <div style={{ padding: '16px', textAlign: 'center' }}>
+        <Title level={3}>กำลังโหลด...</Title>
+      </div>
+    );
+  }
+
+  const progress = ((safeQuestionIndex + 1) / currentRoundQuestions.length) * 100;
 
   return (
     <div style={{ padding: '16px', minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
@@ -230,7 +266,7 @@ export default function QuizPage() {
             style={{ marginBottom: '8px' }}
           />
           <Text type="secondary" style={{ fontSize: '14px' }}>
-            ข้อที่ {currentQuestionIndex + 1} จาก {currentRoundQuestions.length}
+            ข้อที่ {safeQuestionIndex + 1} จาก {currentRoundQuestions.length}
             {isRetryRound && <span style={{ color: '#ff4d4f', marginLeft: '8px' }}>(ทำซ้ำข้อที่ผิด)</span>}
           </Text>
         </div>
@@ -319,8 +355,8 @@ export default function QuizPage() {
               onClick={handleNextQuestion}
               style={{ minWidth: '200px', borderRadius: '8px' }}
             >
-              {currentQuestionIndex < currentRoundQuestions.length - 1 ? 'ข้อถัดไป' : 
-               (wrongQuestions.length > 0 ? 'ไปข้อต่อไป' : 'จบแบบทดสอบ')}
+              {safeQuestionIndex < currentRoundQuestions.length - 1 ? 'ข้อถัดไป' : 
+               (roundWrongQuestions.length > 0 ? 'ทำซ้ำข้อที่ผิด' : 'จบแบบทดสอบ')}
             </Button>
           </div>
         )}

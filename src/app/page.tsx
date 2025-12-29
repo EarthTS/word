@@ -33,7 +33,7 @@ export default function Home() {
                 border: '1px solid #e8e8e8',
                 height: '280px'
               }}
-              bodyStyle={{ padding: '32px' }}
+              styles={{ body: { padding: '32px' } }}
             >
               <div style={{ marginBottom: '24px' }}>
                 <BookOutlined style={{ fontSize: '48px', color: '#1890ff' }} />
@@ -76,7 +76,7 @@ export default function Home() {
                 border: '1px solid #e8e8e8',
                 height: '280px'
               }}
-              bodyStyle={{ padding: '32px' }}
+              styles={{ body: { padding: '32px' } }}
             >
               <div style={{ marginBottom: '24px' }}>
                 <QuestionCircleOutlined style={{ fontSize: '48px', color: '#52c41a' }} />
