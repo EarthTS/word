@@ -352,6 +352,7 @@ export default function QuizPage() {
             <Button 
               type="primary" 
               size="large" 
+              className='w-full'
               onClick={handleNextQuestion}
               style={{ minWidth: '200px', borderRadius: '8px' }}
             >
