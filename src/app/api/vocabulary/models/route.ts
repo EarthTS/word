@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
     try {
-        const apiKey = process.env.GEMINI_API_KEY;
+        const apiKey = process.env.GEMINI_API_KEY ?? 'AIzaSyB7lNE83nRigz7V5A_3cdicqecVX2nHLgw';
         if (!apiKey) {
             return NextResponse.json(
                 { error: 'GEMINI_API_KEY is not set in environment variables' },
