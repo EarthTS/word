@@ -1,11 +1,749 @@
-import React from 'react'
+'use client';
 
-const page = () => {
-  return (
-    <div>
-      quiz
-    </div>
-  )
+import React, { useState, useEffect, useMemo } from 'react';
+import { Card, Button, Typography, Progress, Space, Row, Col, message, Modal, Spin, Divider, Tag } from 'antd';
+import { useRouter } from 'next/navigation';
+import { ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { VocabularyAIResult } from '@/lib/services/vocabulary-ai.service';
+import vocabularyData from '../../assets/vocabulary.json';
+
+const { Title, Text, Paragraph } = Typography;
+
+interface VocabularyItem {
+  english: string;
+  thai_pronunciation: string;
+  thai_meaning: string;
+  type: string;
 }
 
-export default page
+interface QuizQuestion {
+  word: VocabularyItem;
+  choices: string[];
+  correctAnswer: string;
+}
+
+export default function QuizPage() {
+  const router = useRouter();
+  const totalQuestions = 20;
+
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
+  const [showResult, setShowResult] = useState(false);
+  const [score, setScore] = useState(0);
+  const [answeredQuestions, setAnsweredQuestions] = useState<boolean[]>([]);
+  const [quizCompleted, setQuizCompleted] = useState(false);
+  const [wrongAnswers, setWrongAnswers] = useState<{ question: QuizQuestion; userAnswer: string }[]>([]);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [aiResult, setAiResult] = useState<VocabularyAIResult | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [currentWord, setCurrentWord] = useState<string>('');
+
+  // Random 20 words from all vocabulary
+  const quizQuestions = useMemo(() => {
+    const allWords = vocabularyData.vocabulary;
+    // Shuffle and take 20 random words
+    const shuffledWords = [...allWords].sort(() => Math.random() - 0.5).slice(0, totalQuestions);
+    
+    return shuffledWords.map((word): QuizQuestion => {
+      // Get 3 random wrong answers from all vocabulary
+      const wrongAnswers = allWords
+        .filter((w: VocabularyItem) => w.thai_meaning !== word.thai_meaning)
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 3)
+        .map((w: VocabularyItem) => w.thai_meaning);
+
+      // Create choices array with correct answer and wrong answers
+      const choices = [word.thai_meaning, ...wrongAnswers].sort(() => Math.random() - 0.5);
+
+      return {
+        word,
+        choices,
+        correctAnswer: word.thai_meaning
+      };
+    });
+  }, []);
+
+  useEffect(() => {
+    if (quizQuestions.length > 0) {
+      setAnsweredQuestions(new Array(quizQuestions.length).fill(false));
+      setCurrentQuestionIndex(0);
+      setSelectedAnswer(null);
+      setShowResult(false);
+      setScore(0);
+      setQuizCompleted(false);
+      setWrongAnswers([]);
+    }
+  }, [quizQuestions]);
+
+  const handleAnswerSelect = (answer: string) => {
+    const safeIndex = Math.min(currentQuestionIndex, quizQuestions.length - 1);
+    if (safeIndex < 0 || safeIndex >= quizQuestions.length) {
+      return;
+    }
+
+    setSelectedAnswer(answer);
+    setShowResult(true);
+
+    const currentQuestion = quizQuestions[safeIndex];
+    if (!currentQuestion) {
+      return;
+    }
+
+    const isCorrect = answer === currentQuestion.correctAnswer;
+    if (isCorrect) {
+      setScore(prev => prev + 1);
+      message.success('ถูกต้อง!');
+    } else {
+      message.error(`ผิด! คำตอบที่ถูกคือ: ${currentQuestion.correctAnswer}`);
+      setWrongAnswers(prev => [...prev, { question: currentQuestion, userAnswer: answer }]);
+    }
+
+    setAnsweredQuestions(prev => {
+      const newAnswered = [...prev];
+      newAnswered[safeIndex] = true;
+      return newAnswered;
+    });
+  };
+
+  const handleNextQuestion = () => {
+    const safeIndex = Math.min(currentQuestionIndex, quizQuestions.length - 1);
+    if (safeIndex < quizQuestions.length - 1) {
+      setCurrentQuestionIndex(prev => Math.min(prev + 1, quizQuestions.length - 1));
+      setSelectedAnswer(null);
+      setShowResult(false);
+    } else {
+      // Quiz completed
+      setQuizCompleted(true);
+      message.success(`เสร็จสิ้น! คุณได้ ${score}/${totalQuestions} คะแนน`);
+    }
+  };
+
+  const handleBackToHome = () => {
+    router.push('/');
+  };
+
+  const handleRestart = () => {
+    setCurrentQuestionIndex(0);
+    setSelectedAnswer(null);
+    setShowResult(false);
+    setScore(0);
+    setAnsweredQuestions(new Array(quizQuestions.length).fill(false));
+    setQuizCompleted(false);
+    setWrongAnswers([]);
+  };
+
+  const handleInfoClick = async (word: string) => {
+    setCurrentWord(word);
+    setIsModalVisible(true);
+    setAiLoading(true);
+    setAiResult(null);
+
+    try {
+      const response = await fetch('/api/vocabulary/ai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ word: word.trim() }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch word details');
+      }
+
+      const data = await response.json();
+      setAiResult(data);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'เกิดข้อผิดพลาด';
+      message.error(errorMessage);
+      setAiResult(null);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleModalClose = () => {
+    setIsModalVisible(false);
+    setAiResult(null);
+    setCurrentWord('');
+  };
+
+  if (quizQuestions.length === 0) {
+    return (
+      <div style={{ padding: '16px', textAlign: 'center' }}>
+        <Title level={3}>กำลังโหลด...</Title>
+      </div>
+    );
+  }
+
+  // Ensure currentQuestionIndex is within bounds
+  const safeQuestionIndex = Math.min(currentQuestionIndex, quizQuestions.length - 1);
+  const currentQuestion = quizQuestions[safeQuestionIndex];
+  
+  // Safety check: if currentQuestion is undefined, show loading
+  if (!currentQuestion || !currentQuestion.word) {
+    return (
+      <div style={{ padding: '16px', textAlign: 'center' }}>
+        <Title level={3}>กำลังโหลด...</Title>
+      </div>
+    );
+  }
+
+  const progress = ((safeQuestionIndex + 1) / quizQuestions.length) * 100;
+
+  // Show results screen when quiz is completed
+  if (quizCompleted) {
+    const percentage = Math.round((score / totalQuestions) * 100);
+    return (
+      <div style={{ padding: '16px', minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
+        <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+          <div style={{ marginBottom: '24px' }}>
+            <Button 
+              icon={<ArrowLeftOutlined />} 
+              onClick={handleBackToHome}
+              type="text"
+            >
+              กลับหน้าหลัก
+            </Button>
+          </div>
+
+          <Card 
+            style={{ 
+              marginBottom: '24px',
+              borderRadius: '12px',
+              textAlign: 'center',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+            }}
+          >
+            <Title level={2} style={{ marginBottom: '16px', color: '#1890ff' }}>
+              ผลการทดสอบ
+            </Title>
+            <div style={{ marginBottom: '24px' }}>
+              <Text style={{ fontSize: '48px', fontWeight: 'bold', color: percentage >= 80 ? '#52c41a' : percentage >= 60 ? '#faad14' : '#ff4d4f' }}>
+                {score}/{totalQuestions}
+              </Text>
+            </div>
+            <Progress 
+              percent={percentage} 
+              strokeColor={percentage >= 80 ? '#52c41a' : percentage >= 60 ? '#faad14' : '#ff4d4f'}
+              style={{ marginBottom: '16px' }}
+            />
+            <Text style={{ fontSize: '18px', color: '#666' }}>
+              {percentage >= 80 ? 'ยอดเยี่ยม! 🎉' : percentage >= 60 ? 'ดีมาก! 👍' : 'ลองใหม่อีกครั้งนะ! 💪'}
+            </Text>
+          </Card>
+
+          {wrongAnswers.length > 0 && (
+            <Card 
+              style={{ 
+                marginBottom: '24px',
+                borderRadius: '12px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              }}
+            >
+              <Title level={4} style={{ marginBottom: '16px', color: '#ff4d4f' }}>
+                ข้อที่ตอบผิด ({wrongAnswers.length} ข้อ)
+              </Title>
+              <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                {wrongAnswers.map((item, index) => (
+                  <div 
+                    key={index}
+                    style={{
+                      padding: '12px',
+                      backgroundColor: '#fff2f0',
+                      borderRadius: '8px',
+                      border: '1px solid #ffccc7',
+                      position: 'relative'
+                    }}
+                  >
+                    <Button
+                      type="text"
+                      icon={<InfoCircleOutlined />}
+                      onClick={() => handleInfoClick(item.question.word.english)}
+                      style={{
+                        position: 'absolute',
+                        top: '8px',
+                        right: '8px',
+                        color: '#1890ff',
+                        fontSize: '16px'
+                      }}
+                    />
+                    <Text strong style={{ fontSize: '16px', color: '#1890ff' }}>
+                      {item.question.word.english}
+                    </Text>
+                    <Text style={{ fontSize: '14px', color: '#666', marginLeft: '8px' }}>
+                      [{item.question.word.thai_pronunciation}]
+                    </Text>
+                    <div style={{ marginTop: '8px' }}>
+                      <Text style={{ fontSize: '14px', color: '#ff4d4f' }}>
+                        คำตอบของคุณ: {item.userAnswer}
+                      </Text>
+                      <br />
+                      <Text style={{ fontSize: '14px', color: '#52c41a' }}>
+                        คำตอบที่ถูกต้อง: {item.question.correctAnswer}
+                      </Text>
+                    </div>
+                  </div>
+                ))}
+              </Space>
+            </Card>
+          )}
+
+          <div style={{ textAlign: 'center' }}>
+            <Space size="middle">
+              <Button 
+                type="primary" 
+                size="large" 
+                onClick={handleRestart}
+                style={{ minWidth: '150px', borderRadius: '8px' }}
+              >
+                ทำใหม่
+              </Button>
+              <Button 
+                size="large" 
+                onClick={handleBackToHome}
+                style={{ minWidth: '150px', borderRadius: '8px' }}
+              >
+                กลับหน้าหลัก
+              </Button>
+            </Space>
+          </div>
+
+          {/* AI Info Modal */}
+          <Modal
+            title={
+              <Title level={3} style={{ margin: 0, color: '#1890ff' }}>
+                🤖 AI Vocabulary Helper
+              </Title>
+            }
+            open={isModalVisible}
+            onCancel={handleModalClose}
+            footer={[
+              <Button key="close" onClick={handleModalClose}>
+                ปิด
+              </Button>
+            ]}
+            width={800}
+            style={{ top: 20 }}
+          >
+            {aiLoading ? (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <Spin size="large" />
+                <div style={{ marginTop: '16px' }}>
+                  <Text>กำลังค้นหาข้อมูล...</Text>
+                </div>
+              </div>
+            ) : aiResult ? (
+              <div>
+                <Title level={3} style={{ marginBottom: '16px', color: '#1890ff' }}>
+                  {currentWord} {aiResult.type && <span style={{ fontSize: '20px', color: '#999', fontWeight: 'normal' }}>({aiResult.type})</span>}
+                </Title>
+                
+                {/* Meaning */}
+                <div style={{ marginBottom: '24px' }}>
+                  <Title level={5} style={{ marginBottom: '8px' }}>
+                    ความหมาย
+                  </Title>
+                  <Text style={{ fontSize: '16px' }}>
+                    {aiResult.meaning}
+                  </Text>
+                </div>
+
+                <Divider />
+
+                {/* Usage Examples */}
+                {aiResult.usageExamples.length > 0 && (
+                  <div style={{ marginBottom: '24px' }}>
+                    <Title level={5} style={{ marginBottom: '16px' }}>
+                      ตัวอย่างการใช้งาน
+                    </Title>
+                    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                      {aiResult.usageExamples.map((example, index) => (
+                        <Card 
+                          key={index}
+                          size="small"
+                          style={{ backgroundColor: '#f9f9f9' }}
+                        >
+                          <Paragraph strong style={{ marginBottom: '8px' }}>
+                            {example.sentence}
+                          </Paragraph>
+                          <Text type="secondary">{example.translation}</Text>
+                        </Card>
+                      ))}
+                    </Space>
+                  </div>
+                )}
+
+                {/* Synonyms */}
+                {aiResult.synonyms.length > 0 && (
+                  <div style={{ marginBottom: '24px' }}>
+                    <Title level={5} style={{ marginBottom: '12px' }}>
+                      คำพ้องความหมาย
+                    </Title>
+                    <Space wrap>
+                      {aiResult.synonyms.map((synonym, index) => (
+                        <Tag key={index} color="blue" style={{ fontSize: '14px', padding: '4px 12px' }}>
+                          {synonym}
+                        </Tag>
+                      ))}
+                    </Space>
+                  </div>
+                )}
+
+                {/* Antonyms */}
+                {aiResult.antonyms.length > 0 && (
+                  <div style={{ marginBottom: '24px' }}>
+                    <Title level={5} style={{ marginBottom: '12px' }}>
+                      คำตรงข้าม
+                    </Title>
+                    <Space wrap>
+                      {aiResult.antonyms.map((antonym, index) => (
+                        <Tag key={index} color="red" style={{ fontSize: '14px', padding: '4px 12px' }}>
+                          {antonym}
+                        </Tag>
+                      ))}
+                    </Space>
+                  </div>
+                )}
+
+                {/* Word Form Variations */}
+                {aiResult.wordFormVariations.length > 0 && (
+                  <div style={{ marginBottom: '24px' }}>
+                    <Title level={5} style={{ marginBottom: '12px' }}>
+                      รูปคำที่เกี่ยวข้อง
+                    </Title>
+                    <Space wrap>
+                      {aiResult.wordFormVariations.map((variation, index) => (
+                        <Tag key={index} color="green" style={{ fontSize: '14px', padding: '4px 12px' }}>
+                          <Text strong>{variation.word}</Text>
+                          <Text type="secondary" style={{ marginLeft: '4px' }}>
+                            ({variation.form})
+                          </Text>
+                        </Tag>
+                      ))}
+                    </Space>
+                  </div>
+                )}
+
+                {/* Common Phrases */}
+                {aiResult.commonPhrases.length > 0 && (
+                  <div>
+                    <Title level={5} style={{ marginBottom: '16px' }}>
+                      วลีที่ใช้บ่อย
+                    </Title>
+                    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                      {aiResult.commonPhrases.map((phrase, index) => (
+                        <Card 
+                          key={index}
+                          size="small"
+                          style={{ backgroundColor: '#fff7e6' }}
+                        >
+                          <Text strong style={{ display: 'block', marginBottom: '8px', color: '#d46b08' }}>
+                            {phrase.phrase}
+                          </Text>
+                          <Text>{phrase.meaning}</Text>
+                        </Card>
+                      ))}
+                    </Space>
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </Modal>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: '16px', minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
+      <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+        {/* Header */}
+        <div style={{ marginBottom: '24px' }}>
+          <Row justify="space-between" align="middle">
+            <Col>
+              <Button 
+                icon={<ArrowLeftOutlined />} 
+                onClick={handleBackToHome}
+                type="text"
+              >
+                กลับ
+              </Button>
+            </Col>
+            <Col>
+              <Text strong style={{ fontSize: '16px' }}>
+                ทดสอบความรู้
+              </Text>
+            </Col>
+            <Col>
+              <Text type="secondary">
+                {score}/{answeredQuestions.filter(a => a).length}
+              </Text>
+            </Col>
+          </Row>
+        </div>
+
+        {/* Progress */}
+        <div style={{ marginBottom: '24px' }}>
+          <Progress 
+            percent={progress} 
+            showInfo={false} 
+            strokeColor="#1890ff"
+            style={{ marginBottom: '8px' }}
+          />
+          <Text type="secondary" style={{ fontSize: '14px' }}>
+            ข้อที่ {safeQuestionIndex + 1} จาก {quizQuestions.length}
+          </Text>
+        </div>
+
+        {/* Question Card */}
+        <Card 
+          style={{ 
+            marginBottom: '24px',
+            borderRadius: '12px',
+            textAlign: 'center',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            position: 'relative'
+          }}
+        >
+          {showResult && (
+            <Button
+              type="text"
+              icon={<InfoCircleOutlined />}
+              onClick={() => handleInfoClick(currentQuestion.word.english)}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                color: '#1890ff',
+                fontSize: '18px'
+              }}
+            />
+          )}
+          <Title level={2} style={{ marginBottom: '16px', color: '#1890ff' }}>
+            {currentQuestion.word.english}
+          </Title>
+          <Text style={{ fontSize: '16px', color: '#666' }}>
+            [{currentQuestion.word.thai_pronunciation}]
+          </Text>
+          <div style={{ marginTop: '16px' }}>
+            <Text style={{ fontSize: '14px', color: '#999' }}>
+              {currentQuestion.word.type}
+            </Text>
+          </div>
+        </Card>
+
+        {/* Choices */}
+        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          {currentQuestion.choices.map((choice, index) => {
+            const isSelected = selectedAnswer === choice;
+            const isCorrect = choice === currentQuestion.correctAnswer;
+            let buttonType: 'default' | 'primary' | undefined = 'default';
+            let buttonStyle: React.CSSProperties = {
+              height: 'auto',
+              padding: '16px 20px',
+              borderRadius: '12px',
+              fontSize: '16px',
+              textAlign: 'left' as const,
+              whiteSpace: 'normal' as const,
+              wordBreak: 'break-word' as const
+            };
+
+            if (showResult) {
+              if (isCorrect) {
+                buttonType = 'primary';
+                buttonStyle = {
+                  ...buttonStyle,
+                  backgroundColor: '#52c41a',
+                  borderColor: '#52c41a',
+                  color: 'white'
+                };
+              } else if (isSelected && !isCorrect) {
+                buttonStyle = {
+                  ...buttonStyle,
+                  backgroundColor: '#ff4d4f',
+                  borderColor: '#ff4d4f',
+                  color: 'white'
+                };
+              }
+            }
+
+            return (
+              <Button
+                key={index}
+                block
+                size="large"
+                type={buttonType}
+                style={buttonStyle}
+                onClick={() => !showResult && handleAnswerSelect(choice)}
+                disabled={showResult}
+                icon={showResult && isCorrect ? <CheckCircleOutlined /> : 
+                      showResult && isSelected && !isCorrect ? <CloseCircleOutlined /> : null}
+              >
+                {choice}
+              </Button>
+            );
+          })}
+        </Space>
+
+        {/* Next Button */}
+        {showResult && (
+          <div style={{ marginTop: '32px', textAlign: 'center' }}>
+            <Button 
+              type="primary" 
+              size="large" 
+              className='w-full'
+              onClick={handleNextQuestion}
+              style={{ minWidth: '200px', borderRadius: '8px' }}
+            >
+              {safeQuestionIndex < quizQuestions.length - 1 ? 'ข้อถัดไป' : 'ดูผลลัพธ์'}
+            </Button>
+          </div>
+        )}
+
+        {/* AI Info Modal */}
+        <Modal
+          title={
+            <Title level={3} style={{ margin: 0, color: '#1890ff' }}>
+              🤖 AI Vocabulary Helper
+            </Title>
+          }
+          open={isModalVisible}
+          onCancel={handleModalClose}
+          footer={[
+            <Button key="close" onClick={handleModalClose}>
+              ปิด
+            </Button>
+          ]}
+          width={800}
+          style={{ top: 20 }}
+        >
+          {aiLoading ? (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <Spin size="large" />
+              <div style={{ marginTop: '16px' }}>
+                <Text>กำลังค้นหาข้อมูล...</Text>
+              </div>
+            </div>
+          ) : aiResult ? (
+            <div>
+              <Title level={3} style={{ marginBottom: '16px', color: '#1890ff' }}>
+                {currentWord}
+              </Title>
+              
+              {/* Meaning */}
+              <div style={{ marginBottom: '24px' }}>
+                <Title level={5} style={{ marginBottom: '8px' }}>
+                  ความหมาย
+                </Title>
+                <Text style={{ fontSize: '16px' }}>
+                  {aiResult.meaning}
+                </Text>
+              </div>
+
+              <Divider />
+
+              {/* Usage Examples */}
+              {aiResult.usageExamples.length > 0 && (
+                <div style={{ marginBottom: '24px' }}>
+                  <Title level={5} style={{ marginBottom: '16px' }}>
+                    ตัวอย่างการใช้งาน
+                  </Title>
+                  <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                    {aiResult.usageExamples.map((example, index) => (
+                      <Card 
+                        key={index}
+                        size="small"
+                        style={{ backgroundColor: '#f9f9f9' }}
+                      >
+                        <Paragraph strong style={{ marginBottom: '8px' }}>
+                          {example.sentence}
+                        </Paragraph>
+                        <Text type="secondary">{example.translation}</Text>
+                      </Card>
+                    ))}
+                  </Space>
+                </div>
+              )}
+
+              {/* Synonyms */}
+              {aiResult.synonyms.length > 0 && (
+                <div style={{ marginBottom: '24px' }}>
+                  <Title level={5} style={{ marginBottom: '12px' }}>
+                    คำพ้องความหมาย
+                  </Title>
+                  <Space wrap>
+                    {aiResult.synonyms.map((synonym, index) => (
+                      <Tag key={index} color="blue" style={{ fontSize: '14px', padding: '4px 12px' }}>
+                        {synonym}
+                      </Tag>
+                    ))}
+                  </Space>
+                </div>
+              )}
+
+              {/* Antonyms */}
+              {aiResult.antonyms.length > 0 && (
+                <div style={{ marginBottom: '24px' }}>
+                  <Title level={5} style={{ marginBottom: '12px' }}>
+                    คำตรงข้าม
+                  </Title>
+                  <Space wrap>
+                    {aiResult.antonyms.map((antonym, index) => (
+                      <Tag key={index} color="red" style={{ fontSize: '14px', padding: '4px 12px' }}>
+                        {antonym}
+                      </Tag>
+                    ))}
+                  </Space>
+                </div>
+              )}
+
+              {/* Word Form Variations */}
+              {aiResult.wordFormVariations.length > 0 && (
+                <div style={{ marginBottom: '24px' }}>
+                  <Title level={5} style={{ marginBottom: '12px' }}>
+                    รูปคำที่เกี่ยวข้อง
+                  </Title>
+                  <Space wrap>
+                    {aiResult.wordFormVariations.map((variation, index) => (
+                      <Tag key={index} color="green" style={{ fontSize: '14px', padding: '4px 12px' }}>
+                        <Text strong>{variation.word}</Text>
+                        <Text type="secondary" style={{ marginLeft: '4px' }}>
+                          ({variation.form})
+                        </Text>
+                      </Tag>
+                    ))}
+                  </Space>
+                </div>
+              )}
+
+              {/* Common Phrases */}
+              {aiResult.commonPhrases.length > 0 && (
+    <div>
+                  <Title level={5} style={{ marginBottom: '16px' }}>
+                    วลีที่ใช้บ่อย
+                  </Title>
+                  <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                    {aiResult.commonPhrases.map((phrase, index) => (
+                      <Card 
+                        key={index}
+                        size="small"
+                        style={{ backgroundColor: '#fff7e6' }}
+                      >
+                        <Text strong style={{ display: 'block', marginBottom: '8px', color: '#d46b08' }}>
+                          {phrase.phrase}
+                        </Text>
+                        <Text>{phrase.meaning}</Text>
+                      </Card>
+                    ))}
+                  </Space>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </Modal>
+      </div>
+    </div>
+  );
+}

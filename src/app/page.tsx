@@ -3,7 +3,7 @@
 import React from 'react';
 import { Card, Button, Typography, Row, Col, Space } from 'antd';
 import { useRouter } from 'next/navigation';
-import { BookOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { BookOutlined, QuestionCircleOutlined, RobotOutlined } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
 
@@ -23,7 +23,7 @@ export default function Home() {
         </div>
 
         <Row gutter={[24, 24]} justify="center">
-          <Col xs={24} sm={12} md={10}>
+          <Col xs={24} sm={12} md={8}>
             <Card
               hoverable
               style={{
@@ -66,7 +66,7 @@ export default function Home() {
             </Card>
           </Col>
 
-          <Col xs={24} sm={12} md={10}>
+          <Col xs={24} sm={12} md={8}>
             <Card
               hoverable
               style={{
@@ -110,6 +110,51 @@ export default function Home() {
               </Button>
             </Card>
           </Col>
+
+          <Col xs={24} sm={12} md={8}>
+            <Card
+              hoverable
+              style={{
+                textAlign: 'center',
+                borderRadius: '16px',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                border: '1px solid #e8e8e8',
+                height: '280px'
+              }}
+              styles={{ body: { padding: '32px' } }}
+            >
+              <div style={{ marginBottom: '24px' }}>
+                <RobotOutlined style={{ fontSize: '48px', color: '#722ed1' }} />
+              </div>
+              <Title level={3} style={{ marginBottom: '16px', color: '#333' }}>
+                AI Vocabulary
+              </Title>
+              <Text style={{ 
+                fontSize: '16px', 
+                color: '#666',
+                display: 'block',
+                marginBottom: '24px'
+              }}>
+                ค้นหาความหมายและ<br/>
+                ตัวอย่างการใช้งานคำศัพท์
+              </Text>
+              <Button 
+                type="primary" 
+                size="large"
+                onClick={() => router.push('/vocabulary-ai')}
+                style={{ 
+                  borderRadius: '8px',
+                  height: '44px',
+                  fontSize: '16px',
+                  minWidth: '140px',
+                  backgroundColor: '#722ed1',
+                  borderColor: '#722ed1'
+                }}
+              >
+                เริ่มใช้ AI
+              </Button>
+            </Card>
+          </Col>
         </Row>
 
         <div style={{ textAlign: 'center', marginTop: '48px' }}>
@@ -120,6 +165,13 @@ export default function Home() {
             <Text type="secondary" style={{ fontSize: '14px' }}>
               🎯 เรียนรู้และทดสอบความรู้ได้อย่างสะดวก
             </Text>
+            <Button 
+              type="link" 
+              onClick={() => router.push('/models')}
+              style={{ marginTop: '8px' }}
+            >
+              📋 ดูรายการ Models ที่ใช้ได้
+            </Button>
           </Space>
         </div>
       </div>

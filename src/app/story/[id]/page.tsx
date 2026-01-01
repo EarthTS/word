@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Card, Button, Typography, Progress, Space, Row, Col, message } from 'antd';
+import { Card, Button, Typography, Progress, Space, Row, Col, message, Modal, Spin, Divider, Tag } from 'antd';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { VocabularyAIResult } from '@/lib/services/vocabulary-ai.service';
 import vocabularyData from '../../../assets/vocabulary.json';
 
-const { Title, Text } = Typography;
+const { Title, Text, Paragraph } = Typography;
 
 interface VocabularyItem {
   english: string;
@@ -35,6 +36,10 @@ export default function QuizPage() {
   const [roundWrongQuestions, setRoundWrongQuestions] = useState<number[]>([]);
   const [isRetryRound, setIsRetryRound] = useState(false);
   const [currentRoundQuestions, setCurrentRoundQuestions] = useState<QuizQuestion[]>([]);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [aiResult, setAiResult] = useState<VocabularyAIResult | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [currentWord, setCurrentWord] = useState<string>('');
 
   // Get words for the current chapter
   const chapterWords = useMemo(() => {
@@ -197,6 +202,43 @@ export default function QuizPage() {
     router.push('/story');
   };
 
+  const handleInfoClick = async (word: string) => {
+    setCurrentWord(word);
+    setIsModalVisible(true);
+    setAiLoading(true);
+    setAiResult(null);
+
+    try {
+      const response = await fetch('/api/vocabulary/ai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ word: word.trim() }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch word details');
+      }
+
+      const data = await response.json();
+      setAiResult(data);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'เกิดข้อผิดพลาด';
+      message.error(errorMessage);
+      setAiResult(null);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleModalClose = () => {
+    setIsModalVisible(false);
+    setAiResult(null);
+    setCurrentWord('');
+  };
+
   if (chapterWords.length === 0) {
     return (
       <div style={{ padding: '16px', textAlign: 'center' }}>
@@ -277,9 +319,24 @@ export default function QuizPage() {
             marginBottom: '24px',
             borderRadius: '12px',
             textAlign: 'center',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            position: 'relative'
           }}
         >
+          {showResult && (
+            <Button
+              type="text"
+              icon={<InfoCircleOutlined />}
+              onClick={() => handleInfoClick(currentQuestion.word.english)}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                color: '#1890ff',
+                fontSize: '18px'
+              }}
+            />
+          )}
           <Title level={2} style={{ marginBottom: '16px', color: '#1890ff' }}>
             {currentQuestion.word.english}
           </Title>
@@ -361,6 +418,148 @@ export default function QuizPage() {
             </Button>
           </div>
         )}
+
+        {/* AI Info Modal */}
+        <Modal
+          title={
+            <Title level={3} style={{ margin: 0, color: '#1890ff' }}>
+              🤖 AI Vocabulary Helper
+            </Title>
+          }
+          open={isModalVisible}
+          onCancel={handleModalClose}
+          footer={[
+            <Button key="close" onClick={handleModalClose}>
+              ปิด
+            </Button>
+          ]}
+          width={800}
+          style={{ top: 20 }}
+        >
+          {aiLoading ? (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <Spin size="large" />
+              <div style={{ marginTop: '16px' }}>
+                <Text>กำลังค้นหาข้อมูล...</Text>
+              </div>
+            </div>
+          ) : aiResult ? (
+            <div>
+              <Title level={3} style={{ marginBottom: '16px', color: '#1890ff' }}>
+                {currentWord} {aiResult.type && <span style={{ fontSize: '20px', color: '#999', fontWeight: 'normal' }}>({aiResult.type})</span>}
+              </Title>
+              
+              {/* Meaning */}
+              <div style={{ marginBottom: '24px' }}>
+                <Title level={5} style={{ marginBottom: '8px' }}>
+                  ความหมาย
+                </Title>
+                <Text style={{ fontSize: '16px' }}>
+                  {aiResult.meaning}
+                </Text>
+              </div>
+
+              <Divider />
+
+              {/* Usage Examples */}
+              {aiResult.usageExamples.length > 0 && (
+                <div style={{ marginBottom: '24px' }}>
+                  <Title level={5} style={{ marginBottom: '16px' }}>
+                    ตัวอย่างการใช้งาน
+                  </Title>
+                  <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                    {aiResult.usageExamples.map((example, index) => (
+                      <Card 
+                        key={index}
+                        size="small"
+                        style={{ backgroundColor: '#f9f9f9' }}
+                      >
+                        <Paragraph strong style={{ marginBottom: '8px' }}>
+                          {example.sentence}
+                        </Paragraph>
+                        <Text type="secondary">{example.translation}</Text>
+                      </Card>
+                    ))}
+                  </Space>
+                </div>
+              )}
+
+              {/* Synonyms */}
+              {aiResult.synonyms.length > 0 && (
+                <div style={{ marginBottom: '24px' }}>
+                  <Title level={5} style={{ marginBottom: '12px' }}>
+                    คำพ้องความหมาย
+                  </Title>
+                  <Space wrap>
+                    {aiResult.synonyms.map((synonym, index) => (
+                      <Tag key={index} color="blue" style={{ fontSize: '14px', padding: '4px 12px' }}>
+                        {synonym}
+                      </Tag>
+                    ))}
+                  </Space>
+                </div>
+              )}
+
+              {/* Antonyms */}
+              {aiResult.antonyms.length > 0 && (
+                <div style={{ marginBottom: '24px' }}>
+                  <Title level={5} style={{ marginBottom: '12px' }}>
+                    คำตรงข้าม
+                  </Title>
+                  <Space wrap>
+                    {aiResult.antonyms.map((antonym, index) => (
+                      <Tag key={index} color="red" style={{ fontSize: '14px', padding: '4px 12px' }}>
+                        {antonym}
+                      </Tag>
+                    ))}
+                  </Space>
+                </div>
+              )}
+
+              {/* Word Form Variations */}
+              {aiResult.wordFormVariations.length > 0 && (
+                <div style={{ marginBottom: '24px' }}>
+                  <Title level={5} style={{ marginBottom: '12px' }}>
+                    รูปคำที่เกี่ยวข้อง
+                  </Title>
+                  <Space wrap>
+                    {aiResult.wordFormVariations.map((variation, index) => (
+                      <Tag key={index} color="green" style={{ fontSize: '14px', padding: '4px 12px' }}>
+                        <Text strong>{variation.word}</Text>
+                        <Text type="secondary" style={{ marginLeft: '4px' }}>
+                          ({variation.form})
+                        </Text>
+                      </Tag>
+                    ))}
+                  </Space>
+                </div>
+              )}
+
+              {/* Common Phrases */}
+              {aiResult.commonPhrases.length > 0 && (
+                <div>
+                  <Title level={5} style={{ marginBottom: '16px' }}>
+                    วลีที่ใช้บ่อย
+                  </Title>
+                  <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                    {aiResult.commonPhrases.map((phrase, index) => (
+                      <Card 
+                        key={index}
+                        size="small"
+                        style={{ backgroundColor: '#fff7e6' }}
+                      >
+                        <Text strong style={{ display: 'block', marginBottom: '8px', color: '#d46b08' }}>
+                          {phrase.phrase}
+                        </Text>
+                        <Text>{phrase.meaning}</Text>
+                      </Card>
+                    ))}
+                  </Space>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </Modal>
       </div>
     </div>
   );
