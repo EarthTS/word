@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Card, Button, Input, Typography, Space, Spin, message, Divider, Tag } from 'antd';
+import { Card, Button, Input, Typography, Space, Spin, message, Divider, Tag, Badge } from 'antd';
 import { SearchOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { useRouter } from 'next/navigation';
 import { VocabularyAIResult } from '@/lib/services/vocabulary-ai.service';
@@ -12,7 +12,7 @@ export default function VocabularyAIPage() {
   const router = useRouter();
   const [word, setWord] = useState('');
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<VocabularyAIResult | null>(null);
+  const [result, setResult] = useState<(VocabularyAIResult & { _cached?: boolean }) | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleSearch = async () => {
@@ -41,7 +41,11 @@ export default function VocabularyAIPage() {
 
       const data = await response.json();
       setResult(data);
-      message.success('โหลดข้อมูลสำเร็จ!');
+      if (data._cached) {
+        message.success('โหลดข้อมูลสำเร็จ! (จาก Cache)');
+      } else {
+        message.success('โหลดข้อมูลสำเร็จ!');
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'เกิดข้อผิดพลาด';
       setError(errorMessage);
@@ -127,9 +131,16 @@ export default function VocabularyAIPage() {
                 boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
               }}
             >
-              <Title level={3} style={{ marginBottom: '16px', color: '#1890ff' }}>
-                {word} {result.type && <span style={{ fontSize: '20px', color: '#999', fontWeight: 'normal' }}>({result.type})</span>}
-              </Title>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <Title level={3} style={{ margin: 0, color: '#1890ff' }}>
+                  {word} {result.type && <span style={{ fontSize: '20px', color: '#999', fontWeight: 'normal' }}>({result.type})</span>}
+                </Title>
+                {result._cached && (
+                  <Badge.Ribbon text="Cache" color="green">
+                    <div></div>
+                  </Badge.Ribbon>
+                )}
+              </div>
               
               {/* Meaning */}
               <div style={{ marginBottom: '24px' }}>
